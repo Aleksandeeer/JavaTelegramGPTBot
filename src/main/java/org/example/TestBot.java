@@ -15,6 +15,7 @@ import org.telegram.telegrambots.updatesreceivers.DefaultBotSession;
 import records.ChatGptRequest;
 import records.ChatGptResponse;
 
+import java.io.InputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -22,14 +23,14 @@ import java.net.http.HttpResponse;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-
-//gpttoken - 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
-//chatId - 1382755119
+import java.util.Properties;
 
 public class TestBot extends TelegramLongPollingBot {
     static int max_tokens = 1000;
     static int temperature = 1;
     static String model = "text-davinci-001";
+    static String api_key;
+    static String chat_id;
 
     protected TestBot(DefaultBotOptions options) {
         super(options);
@@ -56,7 +57,7 @@ public class TestBot extends TelegramLongPollingBot {
                 HttpRequest request = HttpRequest.newBuilder()
                         .uri(URI.create("https://api.openai.com/v1/completions"))
                         .header("Content-Type", "application/json")
-                        .header("Authorization", "Bearer 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")
+                        .header("Authorization", "Bearer " + api_key)
                         .POST(HttpRequest.BodyPublishers.ofString(input))
                         .build();
 
@@ -77,10 +78,10 @@ public class TestBot extends TelegramLongPollingBot {
             }
         }
         //Если пришёл ответ (нажатие на кнопку и т.д.)
-        //TODO сделать выход из кнопок
+        //TODO сделать выход из кнопок (и сделать их столбиком, а не в строчку)
         else if (update.hasCallbackQuery()) {
             model = update.getCallbackQuery().getData();
-            execute(SendMessage.builder().chatId("1382755119").text("Picked: " + model).build());
+            execute(SendMessage.builder().chatId(chat_id).text("Picked: " + model).build());
         }
     }
 
@@ -96,8 +97,11 @@ public class TestBot extends TelegramLongPollingBot {
                         for (Setting setting : Setting.values()) {
                             buttons.add(InlineKeyboardButton.builder().text(setting.name()).callbackData(setting.getRealName()).build());
                         }
-                        execute(SendMessage.builder().chatId(msg.getChatId().toString()).text("Choose model (now chosen: " + model + ")").replyMarkup(InlineKeyboardMarkup.builder().keyboardRow(buttons).build()).build());
 
+                        List<List<InlineKeyboardButton>> columns = new ArrayList<>();
+                        columns.add(buttons);
+
+                        execute(SendMessage.builder().chatId(msg.getChatId().toString()).text("Choose model (now chosen: " + model + ")").replyMarkup(InlineKeyboardMarkup.builder().keyboard(columns).build()).build());
                 }
             }
         }
@@ -116,6 +120,30 @@ public class TestBot extends TelegramLongPollingBot {
     //example
     @SneakyThrows
     public static void main(String[] args) {
+        Properties prop = new Properties();
+        InputStream input = null;
+
+        try {
+            input = TestBot.class.getClassLoader().getResourceAsStream("config.properties");
+            if (input == null) {
+                System.out.println("Unable to find config.properties");
+                return;
+            }
+            prop.load(input);
+            api_key = prop.getProperty("api_key");
+            chat_id = prop.getProperty("chat_id");
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        } finally {
+            if (input != null) {
+                try {
+                    input.close();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+
         TestBot testBot = new TestBot(new DefaultBotOptions());
         TelegramBotsApi telegramBotsApi = new TelegramBotsApi(DefaultBotSession.class);
         telegramBotsApi.registerBot(testBot);
